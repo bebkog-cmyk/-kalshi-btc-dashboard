@@ -1,7 +1,10 @@
 (function () {
   "use strict";
 
-  var KALSHI = "https://external-api.kalshi.com/trade-api/v2";
+  var KALSHI_HOSTS = [
+    "https://external-api.kalshi.com/trade-api/v2",
+    "https://api.elections.kalshi.com/trade-api/v2"
+  ];
   var SERIES = "KXBTC15M";
   var state = {
     market: null,
@@ -10,7 +13,8 @@
     manual: null,
     lastMarketFetch: 0,
     lastCandleFetch: 0,
-    lastSavedKey: ""
+    lastSavedKey: "",
+    priceSource: "Coinbase proxy"
   };
 
   var el = function (id) { return document.getElementById(id); };
@@ -69,10 +73,26 @@
     return new Date(market.close_time || market.expiration_time || market.expected_expiration_time);
   }
 
-  async function getJson(url) {
-    var response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error("Data request failed (" + response.status + ")");
-    return response.json();
+  async function getJson(url, label) {
+    try {
+      var response = await fetch(url, { cache: "no-store", mode: "cors" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    } catch (error) {
+      throw new Error((label || "Data source") + " unavailable");
+    }
+  }
+
+  async function getKalshi(path) {
+    var lastError;
+    for (var i = 0; i < KALSHI_HOSTS.length; i++) {
+      try {
+        return await getJson(KALSHI_HOSTS[i] + path, "Kalshi");
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("Kalshi market data unavailable");
   }
 
   async function refreshJournalResults() {
@@ -89,7 +109,7 @@
 
     await Promise.all(unresolved.map(async function (ticker) {
       try {
-        var data = await getJson(KALSHI + "/markets/" + encodeURIComponent(ticker));
+        var data = await getKalshi("/markets/" + encodeURIComponent(ticker));
         var result = data.market && data.market.result;
         if (result === "yes" || result === "no") {
           rows.forEach(function (row) {
@@ -107,7 +127,7 @@
   }
 
   async function fetchMarket() {
-    var data = await getJson(KALSHI + "/markets?series_ticker=" + SERIES + "&status=open&limit=100");
+    var data = await getKalshi("/markets?series_ticker=" + SERIES + "&status=open&limit=100");
     var now = Date.now();
     var list = (data.markets || []).filter(function (market) {
       return closeOf(market).getTime() > now;
@@ -128,17 +148,30 @@
     refreshJournalResults();
   }
 
-  async function fetchCoinbase() {
-    var base = "https://api.exchange.coinbase.com/products/BTC-USD";
-    var results = await Promise.all([
-      getJson(base + "/ticker"),
-      getJson(base + "/candles?granularity=60")
-    ]);
-
-    state.proxy = num(results[0].price);
-    state.candles = (results[1] || [])
-      .sort(function (a, b) { return a[0] - b[0]; })
-      .slice(-90);
+  async function fetchPriceData() {
+    try {
+      var base = "https://api.exchange.coinbase.com/products/BTC-USD";
+      var results = await Promise.all([
+        getJson(base + "/ticker", "Coinbase"),
+        getJson(base + "/candles?granularity=60", "Coinbase")
+      ]);
+      state.proxy = num(results[0].price);
+      state.candles = (results[1] || [])
+        .sort(function (a, b) { return a[0] - b[0]; })
+        .slice(-90);
+      state.priceSource = "Coinbase proxy";
+    } catch (coinbaseError) {
+      var kraken = await Promise.all([
+        getJson("https://api.kraken.com/0/public/Ticker?pair=XBTUSD", "Kraken"),
+        getJson("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1", "Kraken")
+      ]);
+      var tickerKey = Object.keys(kraken[0].result || {}).find(function (key) { return key !== "last"; });
+      var candleKey = Object.keys(kraken[1].result || {}).find(function (key) { return key !== "last"; });
+      if (!tickerKey || !candleKey) throw new Error("BTC price feeds unavailable");
+      state.proxy = num(kraken[0].result[tickerKey].c[0]);
+      state.candles = (kraken[1].result[candleKey] || []).slice(-90);
+      state.priceSource = "Kraken proxy";
+    }
     state.lastCandleFetch = Date.now();
   }
 
@@ -240,7 +273,7 @@
     el("countdown").textContent = minutes + ":" + String(seconds).padStart(2, "0");
     el("target").textContent = money(model.target);
     el("spot").textContent = money(model.spot);
-    el("spotSource").textContent = state.manual ? "Manual CF/Kalshi override" : "Coinbase proxy";
+    el("spotSource").textContent = state.manual ? "Manual CF/Kalshi override" : state.priceSource;
 
     var distance = model.spot - model.target;
     el("distance").textContent = (distance >= 0 ? "+" : "") + money(distance);
@@ -297,7 +330,7 @@
       ticker: state.market.ticker,
       target: model.target,
       spot: model.spot,
-      source: state.manual ? "manual" : "coinbase",
+      source: state.manual ? "manual" : state.priceSource.toLowerCase().replace(" proxy", ""),
       seconds_remaining: Math.round(model.seconds),
       p_up: Number(model.pUp.toFixed(4)),
       up_ask: model.upAsk,
@@ -327,7 +360,7 @@
       if (!state.market || now - state.lastMarketFetch > 15000 || closeOf(state.market).getTime() < now) {
         await fetchMarket();
       }
-      if (!state.proxy || now - state.lastCandleFetch > 30000) await fetchCoinbase();
+      if (!state.proxy || now - state.lastCandleFetch > 30000) await fetchPriceData();
       paint();
     } catch (error) {
       el("dot").className = "dot";
