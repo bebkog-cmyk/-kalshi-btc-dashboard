@@ -10,7 +10,7 @@
 <body>
 <main class="wrap">
   <header class="top">
-    <div class="brand">BTC 15m <span>Edge Lab</span></div>
+    <div class="brand">BTC 15m <span>Edge Lab</span> <small style="font-size:10px;color:#8da3ba;vertical-align:middle">v0.5</small></div>
     <div class="live"><i class="dot" id="dot"></i><span id="status">Connecting…</span></div>
   </header>
 
@@ -90,8 +90,17 @@
     </article>
   </section>
 
-  <div class="footer">View-only: no orders are placed and no Kalshi credentials are stored. Public-relay data can be delayed or unavailable and is for paper testing only. Verify the market and rules directly in Kalshi. · Build 0.4</div>
+  <div class="footer">View-only: no orders are placed and no Kalshi credentials are stored. Public-relay data can be delayed or unavailable and is for paper testing only. Verify the market and rules directly in Kalshi. · Build 0.5</div>
 </main>
-<script src="app.js?v=20260914-4"></script>
+<script>
+window.edgeLabStarted=false;
+setTimeout(function(){
+  if(!window.edgeLabStarted){
+    document.getElementById("status").textContent="Update still publishing";
+    document.getElementById("reason").textContent="GitHub has not delivered the newest dashboard code yet. Reload in a minute.";
+  }
+},4000);
+</script>
+<script src="app.js?v=20260914-5" onerror="document.getElementById('status').textContent='Script unavailable'"></script>
 </body>
 </html>
