@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  window.edgeLabStarted = true;
 
   var KALSHI_HOSTS = [
     "https://api.elections.kalshi.com/trade-api/v2",
