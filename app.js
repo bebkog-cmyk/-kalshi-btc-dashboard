@@ -2,8 +2,8 @@
   "use strict";
 
   var KALSHI_HOSTS = [
-    "https://external-api.kalshi.com/trade-api/v2",
-    "https://api.elections.kalshi.com/trade-api/v2"
+    "https://api.elections.kalshi.com/trade-api/v2",
+    "https://external-api.kalshi.com/trade-api/v2"
   ];
   var SERIES = "KXBTC15M";
   var state = {
@@ -74,12 +74,20 @@
   }
 
   async function getJson(url, label) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 5000);
     try {
-      var response = await fetch(url, { cache: "no-store", mode: "cors" });
+      var response = await fetch(url, {
+        cache: "no-store",
+        mode: "cors",
+        signal: controller.signal
+      });
       if (!response.ok) throw new Error("HTTP " + response.status);
-      return response.json();
+      return await response.json();
     } catch (error) {
       throw new Error((label || "Data source") + " unavailable");
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -358,9 +366,13 @@
     try {
       var now = Date.now();
       if (!state.market || now - state.lastMarketFetch > 15000 || closeOf(state.market).getTime() < now) {
+        el("status").textContent = "Loading Kalshi…";
         await fetchMarket();
       }
-      if (!state.proxy || now - state.lastCandleFetch > 30000) await fetchPriceData();
+      if (!state.proxy || now - state.lastCandleFetch > 30000) {
+        el("status").textContent = "Loading BTC prices…";
+        await fetchPriceData();
+      }
       paint();
     } catch (error) {
       el("dot").className = "dot";
