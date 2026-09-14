@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <title>BTC 15m Edge Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div class="brand">BTC 15m <span>Edge Lab</span></div>
+    <div class="live"><i class="dot" id="dot"></i><span id="status">Connecting…</span></div>
+  </header>
+
+  <section class="hero">
+    <div class="eyebrow">Experimental decision support</div>
+    <div class="contract" id="contract">Finding the active KXBTC15M contract…</div>
+    <div class="signal wait" id="signal">NO TRADE</div>
+    <div class="reason" id="reason">Waiting for enough live data.</div>
+    <div class="bar"><div class="fill" id="probBar"></div></div>
+  </section>
+
+  <section class="grid">
+    <article class="card">
+      <div class="label">Time remaining</div><div class="value" id="countdown">—</div>
+    </article>
+    <article class="card">
+      <div class="label">Target</div><div class="value" id="target">—</div>
+    </article>
+    <article class="card">
+      <div class="label">BTC working price</div><div class="value" id="spot">—</div>
+      <div class="label" id="spotSource">Coinbase proxy</div>
+    </article>
+    <article class="card">
+      <div class="label">Distance from target</div><div class="value" id="distance">—</div>
+    </article>
+
+    <article class="card wide">
+      <div class="row">
+        <div><div class="label">Model probability</div><div class="value" id="modelProb">—</div></div>
+        <span class="pill">volatility + restrained momentum</span>
+      </div>
+      <div class="split">
+        <div><div class="label">UP probability</div><div class="value small upc" id="pUp">—</div></div>
+        <div><div class="label">DOWN probability</div><div class="value small downc" id="pDown">—</div></div>
+      </div>
+    </article>
+
+    <article class="card wide">
+      <div class="label">Current prices you can buy at</div>
+      <div class="split">
+        <div><div class="label">UP ask</div><div class="value small upc" id="upAsk">—</div></div>
+        <div><div class="label">DOWN ask</div><div class="value small downc" id="downAsk">—</div></div>
+      </div>
+      <div class="note">Edge uses the ask—not the last trade or midpoint.</div>
+    </article>
+
+    <article class="card wide">
+      <div class="label">Estimated edge after safety buffer</div>
+      <div class="value" id="edge">—</div>
+      <div class="note">A signal requires at least 8 probability points of raw edge, then subtracts a 3-point cushion for fees, spread, latency, and model error.</div>
+    </article>
+
+    <article class="card wide">
+      <div class="label">Optional Kalshi/CF price override</div>
+      <input id="manualPrice" inputmode="decimal" placeholder="Enter the live CF price shown in Kalshi">
+      <div class="controls">
+        <button id="applyManual">Use this price</button>
+        <button class="secondary" id="clearManual">Use Coinbase proxy</button>
+      </div>
+      <div class="note">Exact CF Benchmarks data requires authenticated access. This version uses Coinbase as a proxy unless you type the CF value shown by Kalshi.</div>
+    </article>
+
+    <article class="card wide warning">
+      <div class="label">Final-minute protection</div>
+      <div class="small">Kalshi settles from the average of 60 CF Benchmarks RTI readings in the final minute. This dashboard blocks new signals once that minute begins.</div>
+    </article>
+
+    <article class="card wide">
+      <div class="row">
+        <div><div class="label">Local signal journal</div><div class="small" id="journalCount">0 saved snapshots</div></div>
+        <button class="secondary" id="exportCsv">Export CSV</button>
+      </div>
+      <details>
+        <summary>What the model is doing</summary>
+        <p class="note">It estimates one-minute BTC volatility from recent Coinbase candles, shrinks recent momentum toward zero, adjusts the horizon for Kalshi’s final-minute averaging, and converts the result into a probability. The journal is how we test calibration. This prototype is not evidence of a profitable edge.</p>
+      </details>
+    </article>
+  </section>
+
+  <div class="footer">View-only: no orders are placed and no Kalshi credentials are stored. Market and price data can be delayed or unavailable. Verify the market and rules in Kalshi before acting.</div>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
