@@ -14,7 +14,8 @@
     lastMarketFetch: 0,
     lastCandleFetch: 0,
     lastSavedKey: "",
-    priceSource: "Coinbase proxy"
+    priceSource: "Coinbase proxy",
+    marketSource: "Kalshi direct"
   };
 
   var el = function (id) { return document.getElementById(id); };
@@ -95,9 +96,28 @@
     var lastError;
     for (var i = 0; i < KALSHI_HOSTS.length; i++) {
       try {
-        return await getJson(KALSHI_HOSTS[i] + path, "Kalshi");
+        var direct = await getJson(KALSHI_HOSTS[i] + path, "Kalshi");
+        state.marketSource = "Kalshi direct";
+        return direct;
       } catch (error) {
         lastError = error;
+      }
+    }
+
+    var target = KALSHI_HOSTS[0] + path;
+    var relays = [
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(target),
+      "https://corsproxy.io/?url=" + encodeURIComponent(target)
+    ];
+
+    for (i = 0; i < relays.length; i++) {
+      try {
+        var relayed = await getJson(relays[i] + "&_=" + Date.now(), "Kalshi relay");
+        if (!relayed || (!relayed.markets && !relayed.market)) throw new Error("Invalid relay response");
+        state.marketSource = "Paper mode · public relay";
+        return relayed;
+      } catch (relayError) {
+        lastError = relayError;
       }
     }
     throw lastError || new Error("Kalshi market data unavailable");
@@ -123,7 +143,7 @@
           rows.forEach(function (row) {
             if (row.ticker === ticker) {
               row.result = result.toUpperCase();
-              row.correct = row.signal === "UP" ? result === "yes" : row.signal === "DOWN" ? result === "no" : "";
+              row.correct = row.signal.indexOf("UP") >= 0 ? result === "yes" : row.signal.indexOf("DOWN") >= 0 ? result === "no" : "";
             }
           });
         }
@@ -268,7 +288,7 @@
     var ready = Boolean(market && model);
 
     el("dot").className = "dot" + (ready ? " ok" : "");
-    el("status").textContent = ready ? "Live · refreshes automatically" : "Waiting for data";
+    el("status").textContent = ready ? state.marketSource : "Waiting for data";
     if (!market || !model) return;
 
     var close = closeOf(market);
@@ -308,9 +328,10 @@
       if (model.seconds <= 60) {
         why = "Final minute: settlement averaging is underway and this proxy cannot see the exact CF average.";
       } else if (model.best.raw >= 0.08) {
-        signal = model.best.side;
+        var relayMode = state.marketSource.indexOf("relay") >= 0;
+        signal = relayMode ? "PAPER " + model.best.side : model.best.side;
         cssClass = model.best.side.toLowerCase();
-        why = "Experimental " + model.best.side +
+        why = (relayMode ? "Paper-test only: " : "Experimental ") + model.best.side +
           " edge clears the 8-point threshold before the 3-point safety cushion.";
       }
     } else {
@@ -354,7 +375,7 @@
 
   function updateJournalCount() {
     var rows = JSON.parse(localStorage.getItem("edgeLabJournal") || "[]");
-    var calls = rows.filter(function (row) { return row.signal === "UP" || row.signal === "DOWN"; });
+    var calls = rows.filter(function (row) { return row.signal.indexOf("UP") >= 0 || row.signal.indexOf("DOWN") >= 0; });
     var graded = calls.filter(function (row) { return row.correct === true || row.correct === false; });
     var correct = graded.filter(function (row) { return row.correct === true; }).length;
     var label = rows.length + " snapshots";
